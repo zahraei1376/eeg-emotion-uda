@@ -38,3 +38,12 @@ def make_windows(x, fs, win=2, step=1):
     L, S = int(win * fs), int(step * fs)
     n = (x.shape[1] - L) // S + 1
     return np.stack([x[:, i * S:i * S + L] for i in range(n)])  # (n, C, L)
+
+def psd_features(w, fs):
+    L = w.shape[-1]
+    X = np.fft.rfft(w.astype(np.float32), axis=-1)
+    psd = (np.abs(X) ** 2) / L
+    f = np.fft.rfftfreq(L, 1 / fs)
+    df = f[1] - f[0]
+    out = [psd[..., (f >= lo) & (f <= hi)].sum(-1) * df for lo, hi in BANDS.values()]
+    return np.stack(out, 1).reshape(len(w), -1).astype(np.float32)
