@@ -40,10 +40,22 @@ def make_windows(x, fs, win=2, step=1):
     return np.stack([x[:, i * S:i * S + L] for i in range(n)])  # (n, C, L)
 
 def psd_features(w, fs):
-    L = w.shape[-1]
+    # w = (n, C, L)
+    L = w.shape[-1] 
     X = np.fft.rfft(w.astype(np.float32), axis=-1)
     psd = (np.abs(X) ** 2) / L
     f = np.fft.rfftfreq(L, 1 / fs)
     df = f[1] - f[0]
     out = [psd[..., (f >= lo) & (f <= hi)].sum(-1) * df for lo, hi in BANDS.values()]
     return np.stack(out, 1).reshape(len(w), -1).astype(np.float32)
+
+def load_deap(d):
+    feats, raws, labs = [], [], []
+    for f in sorted(glob.glob(os.path.join(d, "s*.dat"))):
+        m = pickle.load(open(f, "rb"), encoding="latin1")
+        for t in range(40):
+            x = m["data"][t, :32, 384:]  # drop 3 s pre-trial (128 Hz)
+            w = make_windows(x, 128)
+            feats.append(psd_features(w, 128)); raws.append(w.astype(np.float16))
+            labs.append(np.full(len(w), int(m["labels"][t, 0] > 4.5)))  # valence > 4.5 = positive
+    return np.concatenate(feats), np.concatenate(raws), np.concatenate(labs), 128
