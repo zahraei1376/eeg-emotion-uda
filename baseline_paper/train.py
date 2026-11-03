@@ -59,3 +59,22 @@ def load_deap(d):
             feats.append(psd_features(w, 128)); raws.append(w.astype(np.float16))
             labs.append(np.full(len(w), int(m["labels"][t, 0] > 4.5)))  # valence > 4.5 = positive
     return np.concatenate(feats), np.concatenate(raws), np.concatenate(labs), 128
+
+def load_seed(d):
+    lab = sio.loadmat(os.path.join(d, "label.mat"))["label"].ravel()
+    idx = [SEED_CH.index(c) for c in DEAP_CH]  # the 32 channels common to both datasets
+    sos = butter(4, [0.3, 50], btype="band", fs=200, output="sos")
+    feats, raws, labs = [], [], []
+    for f in sorted(glob.glob(os.path.join(d, "*.mat"))):
+        if os.path.basename(f) == "label.mat":
+            continue
+        m = sio.loadmat(f)
+        keys = sorted([k for k in m if "_eeg" in k], key=lambda k: int(k.split("_eeg")[-1]))
+        for t, k in enumerate(keys):
+            if lab[t] == 0:  # drop neutral
+                continue
+            x = sosfiltfilt(sos, m[k][idx].astype(np.float64), axis=-1)
+            w = make_windows(x, 200)
+            feats.append(psd_features(w, 200)); raws.append(w.astype(np.float16))
+            labs.append(np.full(len(w), int(lab[t] == 1)))
+    return np.concatenate(feats), np.concatenate(raws), np.concatenate(labs), 200
